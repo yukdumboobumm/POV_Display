@@ -6,7 +6,8 @@ import os
 # Open the image file
 # im = Image.open(".\\images\\Texas_flag_map.png")
 # im = Image.open("paidyn.png")
-imageFile = "Texas_flag_map.png"
+# imageFile = "Texas_flag_map.png"
+imageFile = "paidyn.png"
 im = Image.open(os.path.join(".", "images", imageFile))
 
 # Get the width and height of the image
@@ -17,7 +18,7 @@ center_x = width / 2
 center_y = height / 2
 
 NUM_LEDS = 29
-NUM_SLICES = 80
+NUM_SLICES = 120
 
 # Set the number of slices
 num_slices = NUM_SLICES
@@ -27,27 +28,35 @@ sector_thickness = (width / 2 ) // num_sectors
 # Calculate the angle between each slice
 angle_per_slice = 360.0 / num_slices
 
-# Create a blank image to hold the slices
+# Create lists to hold the slices and sectors
 slices = []
 sectors = []
 
+#pre initialize an LED strip, create list for the raw data
 LEDs = [0] * (num_sectors*2)
 image_data = []
 
+#get a slice from an image, will work on the arguments here...a bit lazy
 def makeSlice(i,k):
     slice = Image.new('RGBA', (width, height), (0, 0, 0, 0))
     # Create a mask for the slice
     mask = Image.new('L', (width, height), 0)
     draw = ImageDraw.Draw(mask)
 
-    # # Second pieslice
-    draw.pieslice(((0, 0), (width, height)), ((i * angle_per_slice) + (k*180)), (((i + 1) * angle_per_slice) + (k*180)), fill=255)
+    sliceMirror = k * 180
+    startAngle = (i * angle_per_slice) + sliceMirror
+    endAngle = ((i + 1) * angle_per_slice) + sliceMirror
+    boundingBox = ((0, 0), (width, height))
 
+    # # Second pieslice
+    draw.pieslice(boundingBox, startAngle, endAngle, fill=255)
+    
     # Use the mask to extract the slice from the original image
     slice.putalpha(mask)
     slice.paste(im, (0, 0), mask)
     return slice
 
+#make a sector from a slice, lazy with arguments here too
 def makeSector(slice, j):
     sector = Image.new('RGBA', (width,height), (0,0,0,0))
     sectorMask = Image.new('L', (width, height), 0)
@@ -74,7 +83,8 @@ def makeSector(slice, j):
     # sector.show()
     return sector
 
-
+#get the average RGB color within a sector
+#that numpy mean process is pretty expensive, might look at upgrading this soon
 def getRGB(sector) :
     sector_array = np.array(sector)
     # mask = (sector_array != 0)
@@ -145,6 +155,7 @@ def saveRawData():
         for row in image_data:
             f.write(', '.join(row) + ',\n')
 
+#kind of the opposite of makeSlice --> makeSector but using a different process. Might actually be slower though :(
 def reconstituteImage():
     output_image = Image.new('RGBA', (width, height), (0, 0, 0, 0))
     outFileName = imageFile[:-4]+"_recon.png"
@@ -189,40 +200,55 @@ def reconstituteImage():
 
 
 
+#main loop where all the magic happens
+def main():
+    # loop to create image slices
+    #since I have a full rotor that extends across the entire image I only need half of the slices.
+    #could update to make portalbe for use cases with only half a rotor (many POV displays use a half)
+    for i in range(int(num_slices/2)):
+        # i'm creating bow tie slices here, so i do the same thing twice, just mirrored 180deg on k=1
+        for k in range(2):
+            # makeSlice does it what it says it does
+            slice = makeSlice(i,k)
+            slices.append(slice)
+            
+            #after I make a slice I create two concentric circles to wind up with a sectors
+            #these sectors have a span set by the number of slices and a thickness set by the number of LEDs
+            for j in range(num_sectors):
+                sector = makeSector(slice, j)
+                sectors.append(sector)
+                #sectors are created from the outside converging on the center
+                #but the leds count from 0 - NUMLEDS from edge to edge
+                #if k is zero, the count is normal, but for the mirrored sector (k==1) I need to set the LEDS from NUM_LEDS to the center
+                #hence the need to initialize the list
+                if(k):
+                    index=(num_sectors*2 - 1- j)
+                else: 
+                    index=j   
+                LEDs[index] = getRGB(sector)
 
+        # LEDs[num_sectors]='0x0'
+        #insert a blank pixel into the middle of the strip
+        #that pixel doesn't actually move so having any different colors just looks like a flicker
+        #3 options: 1)turn it off, 2)pick an accent color or 3)average all of the middle+1 and middle-1 pixels and it to that
+        LEDs.insert(num_sectors,'0x000000')
+        #add the slice to the image_data
+        image_data.append(LEDs)
+        #debug info to keep the terminal updated
+        print(i,LEDs)
+        #initialize the list. not neccesary but why not.
+        LEDs = [0] * (num_sectors*2)
 
+    ##What actions do you want to take with the data?
+    #generate a header file for an arduino
+    makeHeaderFile()
+    #save the raw hex values
+    # saveRawData()
+    #save the sliced images (useful for debugging)
+    # saveSlicedImages()
+    #get a glimpse at what the result will look like
+    reconstituteImage()
 
-
-# Loop through the slices
-for i in range(int(num_slices/2)):
-    # Create a new image for each slice
-    for k in range(2):
-        # Add the slice to the list of slices
-        slice = makeSlice(i,k)
-        slices.append(slice)
-        
-        for j in range(num_sectors):
-            sector = makeSector(slice, j)
-            sectors.append(sector)
-            if(k):
-                index=(num_sectors*2 - 1- j)
-            else: 
-                index=j   
-            LEDs[index] = getRGB(sector)
-
-    # LEDs[num_sectors]='0x0'
-    LEDs.insert(num_sectors,'0x000000')
-    image_data.append(LEDs)
-    print(LEDs)
-    LEDs = [0] * (num_sectors*2)
-
-# myArray = np.array(image_data)
-# np.savetxt('image.txt',myArray)
-
-##What actions do you want to take with the data?
-makeHeaderFile()
-# saveRawData()
-# saveSlicedImages()
-reconstituteImage()
-
-
+#make sure I'm not a module
+if __name__ == "__main__":
+    main()
