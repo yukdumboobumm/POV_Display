@@ -119,7 +119,7 @@ def getRGB(sector) :
 
 def makeHeaderFile():
     outFileName = imageFile[:-4]+"_out.h"
-    with open(os.path.join(".", "images", outFileName), 'w') as f:
+    with open(os.path.join(".", "output", outFileName), 'w') as f:
         f.write("#include \"Arduino.h\"\n\n")
         f.write("#ifndef "+ outFileName.upper().replace('.','_')+'\n')
         f.write("#define "+ outFileName.upper().replace('.','_')+'\n\n')
@@ -144,14 +144,16 @@ def makeHeaderFile():
 def saveSlicedImages():
 # Save each slice as a separate image file
     for i in range(len(slices)):
-        slices[i].save(".\\images\\slice_{}.png".format(i))
+        sliceName = os.path.join(".", "output", "slicedImages", "slice_{}.png".format(i))
+        slices[i].save(sliceName)
         for j in range(num_sectors):
-            sectors[(i*num_sectors)+j].save(".\\images\\slice_{}-sector_{}.png".format(i,j))
-    pprint(image_data, width=800, indent=4)
+            sectorName = os.path.join(".", "output", "slicedImages", "slice_{}-sector_{}.png".format(i,j))
+            sectors[(i*num_sectors)+j].save(sectorName)
+    # pprint(image_data, width=800, indent=4)
 
 def saveRawData():
     outFileName = imageFile[:-4]+"_raw.txt"
-    with open(os.path.join(".", "images", outFileName), 'w') as f:
+    with open(os.path.join(".", "output", outFileName), 'w') as f:
         for row in image_data:
             f.write(', '.join(row) + ',\n')
 
