@@ -6,8 +6,8 @@ import os
 ##Global defs
 
 # Open the image file
-# IMAGE_FILE = "Texas_flag_map.png"
-IMAGE_FILE = "paidyn.png"
+IMAGE_FILE = "Texas_flag_map.png"
+# IMAGE_FILE = "paidyn.png"
 IM = Image.open(os.path.join(".", "images", IMAGE_FILE))
 
 NUM_LEDS = 29
@@ -81,36 +81,30 @@ def makeSector(slice, j):
 #get the average RGB color within a sector
 #that numpy mean process is pretty expensive, might look at upgrading this soon
 def getRGB(sector) :
+    # create a numpy array from the sector canvas
+    #each element in the array represents a pixel
+    #and has 3-dimensions (height, width, (RGBA))
     sector_array = np.array(sector)
-    # mask = (sector_array != 0)
-    # print(sector_array)
-    # Get the RGB values from the array
-    #[x,y,(r,g,b)]?
-    r = sector_array[:, :, 0]
-    g = sector_array[:, :, 1]
-    b = sector_array[:, :, 2]
+    #create a masked 3D array of T/F based on the alpha channel (preserves any black in the image)
+    alphaMask = sector_array[...,3]!=0
+    #create a new 1D array containing only the values with non-zero alpha
+    sector_channels = sector_array[alphaMask]
 
-    # Mask all the zeros in the array
-    r_masked = np.ma.masked_equal(r, 0)
-    g_masked = np.ma.masked_equal(g, 0)
-    b_masked = np.ma.masked_equal(b, 0)
-    # print(i,j,r_masked, g_masked, b_masked)  # Add this line
-
-    if np.ma.count(r_masked) == 0:
-        r_mean = 0
+    #check that there are actually some values to average
+    if (sector_channels.size):
+        # Get the RGB values from the array
+        #[x,y,(r,g,b)] so slice all columns and all row and return the appropriate channel
+        r = sector_channels[:, 0]
+        g = sector_channels[:, 1]
+        b = sector_channels[:, 2]
+        #calculate the mean. though perhaps r.sum() / len(r) would be faster? Need to learn more about np.mean
+        r_mean = int(np.mean(r))
+        g_mean = int(np.mean(g))
+        b_mean = int(np.mean(b))
+        rgbVal = '0x'+hex(r_mean)[2:].zfill(2)+hex(g_mean)[2:].zfill(2)+hex(b_mean)[2:].zfill(2)
+    #if there aren't then we need to assign some value. I've chosen black but it can be any image-background that we prefer
     else:
-        r_mean = int(np.mean(r_masked))
-    if np.ma.count(g_masked) == 0:
-        g_mean = 0
-    else:
-        g_mean = int(np.mean(g_masked))
-
-    if np.ma.count(b_masked) == 0:
-        b_mean = 0
-    else:
-        b_mean = int(np.mean(b_masked))
-    
-    rgbVal = '0x'+hex(r_mean)[2:].zfill(2)+hex(g_mean)[2:].zfill(2)+hex(b_mean)[2:].zfill(2)
+        rgbVal = '0x000000'
     return rgbVal
 
 def makeHeaderFile(imData):
@@ -192,7 +186,7 @@ def reconstituteImage(imData):
                 draw.pieslice(((x0_outer, y0_outer), (x1_outer, y1_outer)), start_angle, end_angle, fill=255)
                 draw.pieslice(((x0_inner, y0_inner), (x1_inner, y1_inner)), start_angle, end_angle, fill=0)
                 output_image.paste(overlay, (0,0), pixel_mask)
-        print(i, end=", ")
+        # print(i, end=", ")
         # output_image.show()
     # Save the output image to a file
     output_image.save(os.path.join(".", 'output', 'images', outFileName))
