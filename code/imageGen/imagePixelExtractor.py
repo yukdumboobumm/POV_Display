@@ -10,6 +10,9 @@ import os
 IMAGE_FILE = "paidyn.png"
 IM = Image.open(os.path.join(".", "images", IMAGE_FILE))
 
+NUM_LEDS = 29
+NUM_SLICES = 120
+
 # Get the width and height of the image
 WIDTH, HEIGHT = IM.size
 
@@ -17,12 +20,11 @@ WIDTH, HEIGHT = IM.size
 CENTER_X = WIDTH / 2
 CENTER_Y = HEIGHT / 2
 
-NUM_LEDS = 29
-NUM_SLICES = 120
+MIN_DIM = min(WIDTH, HEIGHT)
 
 # Set the number of slices
 NUM_SECTORS = (NUM_LEDS // 2)
-SECTOR_THICKNESS = (WIDTH / 2 ) // NUM_SECTORS 
+SECTOR_THICKNESS = (MIN_DIM / 2 ) // NUM_SECTORS 
 
 # Calculate the angle between each slice
 SLICE_ANGLE = 360.0 / NUM_SLICES
@@ -41,7 +43,7 @@ def makeSlice(i,k):
     endAngle = ((i + 1) * SLICE_ANGLE) + sliceMirror
     boundingBox = ((0, 0), (WIDTH, HEIGHT))
 
-    # # Second pieslice
+    ## draw pieslice
     draw.pieslice(boundingBox, startAngle, endAngle, fill=255)
     
     # Use the mask to extract the slice from the original image
@@ -83,6 +85,7 @@ def getRGB(sector) :
     # mask = (sector_array != 0)
     # print(sector_array)
     # Get the RGB values from the array
+    #[x,y,(r,g,b)]?
     r = sector_array[:, :, 0]
     g = sector_array[:, :, 1]
     b = sector_array[:, :, 2]
@@ -189,9 +192,10 @@ def reconstituteImage(imData):
                 draw.pieslice(((x0_outer, y0_outer), (x1_outer, y1_outer)), start_angle, end_angle, fill=255)
                 draw.pieslice(((x0_inner, y0_inner), (x1_inner, y1_inner)), start_angle, end_angle, fill=0)
                 output_image.paste(overlay, (0,0), pixel_mask)
+        print(i, end=", ")
         # output_image.show()
     # Save the output image to a file
-    output_image.save(os.path.join(".", "images", outFileName))
+    output_image.save(os.path.join(".", 'output', 'images', outFileName))
 
 
 ###MAIN
@@ -207,7 +211,7 @@ def main():
     # loop to create image slices
     #since I have a full rotor that extends across the entire image I only need half of the slices.
     #could update to make portalbe for use cases with only half a rotor (many POV displays use a half)
-    for i in range(int(NUM_SLICES/2)):
+    for i in range(NUM_SLICES//2):
         # i'm creating bow tie slices here, so i do the same thing twice, just mirrored 180deg on k=1
         for k in range(2):
             # makeSlice does it what it says it does
@@ -223,7 +227,7 @@ def main():
                 #but the leds count from 0 - NUMLEDS from edge to edge
                 #if k is zero, the count is normal, but for the mirrored sector (k==1) I need to set the LEDS from NUM_LEDS to the center
                 #hence the need to initialize the list
-                if(k):
+                if(k==1):
                     index=(NUM_SECTORS*2 - 1- j)
                 else: 
                     index=j   
