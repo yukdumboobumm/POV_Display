@@ -92,54 +92,6 @@ def rotateImage(imageArray, angle):
     # outputImage.show()
     return rotatedImage
 
-#get a slice from an image, will work on the arguments here...a bit lazy
-def makeSlice(i,k):
-    slice = Image.new('RGBA', (WIDTH, HEIGHT), (0, 0, 0, 0))
-    # Create a mask for the slice
-    mask = Image.new('L', (WIDTH, HEIGHT), 0)
-    draw = ImageDraw.Draw(mask)
-
-    sliceMirror = k * 180
-    startAngle = ((i * SLICE_ANGLE) - SLICE_ANGLE / 2) + sliceMirror
-    # endAngle = ((i + 1) * SLICE_ANGLE) + sliceMirror
-    endAngle = startAngle + SLICE_ANGLE
-    boundingBox = ((0, 0), (WIDTH, HEIGHT))
-
-    ## draw pieslice
-    draw.pieslice(boundingBox, startAngle, endAngle, fill=255)
-    
-    # Use the mask to extract the slice from the original image
-    slice.putalpha(mask)
-    slice.paste(IM, (0, 0), mask)
-    return slice
-
-#make a sector from a slice, lazy with arguments here too
-def makeSector(slice, j):
-    sector = Image.new('RGBA', (WIDTH,HEIGHT), (0,0,0,0))
-    sectorMask = Image.new('L', (WIDTH, HEIGHT), 0)
-    sectorDraw = ImageDraw.Draw(sectorMask)
-
-    outer_radius = (WIDTH/2) - (SECTOR_THICKNESS * j)
-    inner_radius = outer_radius - SECTOR_THICKNESS
-
-    x0_outer = CENTER_X - outer_radius
-    y0_outer = CENTER_Y - outer_radius
-    x1_outer = CENTER_X + outer_radius
-    y1_outer = CENTER_Y + outer_radius
-
-    x0_inner = CENTER_X - inner_radius
-    y0_inner = CENTER_Y - inner_radius
-    x1_inner = CENTER_X + inner_radius
-    y1_inner = CENTER_Y + inner_radius
-
-    sectorDraw.pieslice(((x0_outer, y0_outer), (x1_outer, y1_outer)), 0, 360, fill=255)
-    sectorDraw.pieslice(((x0_inner, y0_inner), (x1_inner, y1_inner)), 0, 360, fill=0)
-
-    sector.putalpha(sectorMask)
-    sector.paste(slice, (0,0), sectorMask)
-    # sector.show()
-    return sector
-
 #get the average RGB color within a sector
 def getRGB(ledPixel) :
     #each element in the array represents a pixel
@@ -191,84 +143,11 @@ def makeHeaderFile(imData):
         f.write("\n};\n\n")
         f.write("#endif //"+outFileName.upper().replace('.','_')+'\n')
 
-def makeHeaderFile_speed(imData):
-    outFileName = IMAGE_FILE[:-4]+"_out.h"
-    with open(os.path.join(".", "output", outFileName), 'w') as f:
-        f.write("#include \"Arduino.h\"\n\n")
-        f.write("#ifndef "+ outFileName.upper().replace('.','_')+'\n')
-        f.write("#define "+ outFileName.upper().replace('.','_')+'\n\n')
-        f.write("#define NUM_LEDS " + str(NUM_LEDS) + "\n")
-        f.write("#define SLICES " + str(NUM_SLICES) + "\n\n")
-
-        f.write("const uint32_t FRAME[(SLICES / 2) * NUM_LEDS] PROGMEM = {\n")
-        for imageSlice in imData:
-            for led in imageSlice:
-                f.write(led + ',')
-            f.write('\n') 
-        f.write("\n};\n\n")
-        f.write("#endif //"+outFileName.upper().replace('.','_')+'\n')
-
-def saveSlicedImages(sliceList, sectorList):
-# Save each slice as a separate image file
-    if LOW_RAM:
-        return
-    for i in range(len(sliceList)):
-        sliceName = os.path.join(".", "output", "slicedImages", "slice_{}.png".format(i))
-        sliceList[i].save(sliceName)
-        for j in range(NUM_SECTORS):
-            sectorName = os.path.join(".", "output", "slicedImages", "slice_{}-sector_{}.png".format(i,j))
-            sectorList[(i*NUM_SECTORS)+j].save(sectorName)
-    # pprint(LED_image, WIDTH=800, indent=4)
-
 def saveRawData(imData):
     outFileName = IMAGE_FILE[:-4]+"_raw.txt"
     with open(os.path.join(".", "output", outFileName), 'w') as f:
         for row in imData:
             f.write(', '.join(row) + ',\n')
-
-#kind of the opposite of makeSlice --> makeSector but using a different process. Might actually be slower though :(
-def reconstituteImage(imData):
-    output_image = Image.new('RGBA', (WIDTH, HEIGHT), (0, 0, 0, 0))
-    outFileName = IMAGE_FILE[:-4]+"_recon.png"
-    for i,row in enumerate(imData):
-        for k in range(2):
-            if k==0:
-                pixels = row[:NUM_SECTORS]
-            else:
-                pixels = row[len(row)-1::-1]
-            for j,pixel in enumerate(pixels):
-                outer_radius = (WIDTH/2) - (SECTOR_THICKNESS * j)
-                inner_radius = outer_radius - SECTOR_THICKNESS
-
-                x0_outer = CENTER_X - outer_radius
-                y0_outer = CENTER_Y - outer_radius
-                x1_outer = CENTER_X + outer_radius
-                y1_outer = CENTER_Y + outer_radius
-
-                x0_inner = CENTER_X - inner_radius
-                y0_inner = CENTER_Y - inner_radius
-                x1_inner = CENTER_X + inner_radius
-                y1_inner = CENTER_Y + inner_radius
-
-                start_angle = (i * SLICE_ANGLE) + (k*180)
-                end_angle = ((i + 1) * SLICE_ANGLE) + (k*180)
-
-                color_hex = int(pixel,16)
-                r = (color_hex >> 16) & 0xff
-                g = (color_hex >> 8) & 0xff
-                b = color_hex & 0xff
-                color = (r,g,b)
-                pixel_mask = Image.new("L", IM.size, 0)
-                overlay = Image.new('RGB', (WIDTH, HEIGHT), color)
-                draw = ImageDraw.Draw(pixel_mask)
-                draw.pieslice(((0, 0), (WIDTH, HEIGHT)), start_angle, end_angle, fill=0)
-                draw.pieslice(((x0_outer, y0_outer), (x1_outer, y1_outer)), start_angle, end_angle, fill=255)
-                draw.pieslice(((x0_inner, y0_inner), (x1_inner, y1_inner)), start_angle, end_angle, fill=0)
-                output_image.paste(overlay, (0,0), pixel_mask)
-        # print(i, end=", ")
-        # output_image.show()
-    # Save the output image to a file
-    output_image.save(os.path.join(".", 'output', 'images', outFileName))
 
 def recomposeImage(led_data):
     reImageArray = np.zeros((HEIGHT, WIDTH, CHANNELS), dtype=np.uint8)
